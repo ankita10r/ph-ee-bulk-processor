@@ -135,6 +135,9 @@ public class ProcessorStartRoute extends BaseRouteBuilder {
             String requestId = exchange.getIn().getHeader("requestId", String.class);
             String purpose = exchange.getIn().getHeader("purpose", String.class);
             String batchId = UUID.randomUUID().toString();
+            // extracting and setting callback Url
+            String callbackUrl = exchange.getIn().getHeader("X-CallbackURL", String.class);
+            exchange.setProperty(CALLBACK_URL, callbackUrl);
             exchange.setProperty(BATCH_ID, batchId);
             exchange.setProperty(FILE_NAME, fileName);
             exchange.setProperty(REQUEST_ID, requestId);
@@ -223,6 +226,7 @@ public class ProcessorStartRoute extends BaseRouteBuilder {
                     String requestId = exchange.getProperty(REQUEST_ID, String.class);
                     String purpose = exchange.getProperty(PURPOSE, String.class);
                     String batchId = exchange.getProperty(BATCH_ID, String.class);
+                    String callbackUrl = exchange.getProperty(CALLBACK,String.class);
                     String note = null;
 
                     if (purpose == null || purpose.isEmpty()) {
@@ -235,11 +239,11 @@ public class ProcessorStartRoute extends BaseRouteBuilder {
                     File file = new File(fileName);
                     file.setWritable(true);
                     file.setReadable(true);
-                    
+
                     logger.debug("File absolute path: {}", file.getAbsolutePath());
 
                     boolean verifyData = verifyData(file);
-                    logger.debug("Data verification result {}", verifyData);
+                    logger.info("Data verification result {}", verifyData);
                     if (!verifyData) {
                         note = "Invalid data in file data processing stopped";
                     }
@@ -248,9 +252,7 @@ public class ProcessorStartRoute extends BaseRouteBuilder {
 
                     logger.debug("File uploaded {}", nm);
 
-                    // extracting and setting callback Url
-                    String callbackUrl = exchange.getIn().getHeader("X-Callback-URL", String.class);
-                    exchange.setProperty(CALLBACK_URL, callbackUrl);
+
 
                     List<Integer> phases = phaseUtils.getValues();
                     logger.debug(phases.toString());
@@ -313,10 +315,13 @@ public class ProcessorStartRoute extends BaseRouteBuilder {
                     String filename = exchange.getIn().getHeader("filename", String.class);
                     String requestId = exchange.getIn().getHeader("X-CorrelationID", String.class);
                     String purpose = exchange.getIn().getHeader("Purpose", String.class);
-                    String type = exchange.getIn().getHeader("Type", String.class);
+                    String type = exchange.getIn().getHeader("type", String.class);
                     String clientCorrelationId = exchange.getIn().getHeader(HEADER_CLIENT_CORRELATION_ID, String.class);
                     String registeringInstitutionId = exchange.getIn().getHeader(HEADER_REGISTERING_INSTITUTE_ID, String.class);
                     String programId = exchange.getIn().getHeader(HEADER_PROGRAM_ID, String.class);
+                    // extracting and setting callback Url
+                    String callbackUrl = exchange.getIn().getHeader("X-CallbackURL", String.class);
+                    exchange.setProperty(CALLBACK_URL, callbackUrl);
                     exchange.setProperty(FILE_NAME, filename);
                     exchange.setProperty(REQUEST_ID, requestId);
                     exchange.setProperty(PURPOSE, purpose);
@@ -389,9 +394,9 @@ public class ProcessorStartRoute extends BaseRouteBuilder {
         String line;
         br.readLine();
         while ((line = br.readLine()) != null) {
-            String[] row = line.split(",");
+            String[] row = line.split(",", -1);
             if (row.length != columnNames.size()) {
-                logger.debug("Row invalid {} {}", row.length, columnNames.size());
+                logger.info("Row invalid {} {}", row.length, columnNames.size());
                 return false;
             }
             if (!verifyRow(row)) {
@@ -408,14 +413,14 @@ public class ProcessorStartRoute extends BaseRouteBuilder {
                 int j = row[i].indexOf("MSISDN");
                 if (!(j == row.length)) {
                     if (!row[j + 1].matches("^[0-9]*$")) {
-                        logger.debug("MSISDN invalid");
+                        logger.info("MSISDN invalid");
                         return false;
                     }
                 }
             } else if (row[i].contains("amount")) {
                 int j = row[i].indexOf("amount");
                 if (!row[j].matches("^[0-9]*$")) {
-                    logger.debug("Amount invalid");
+                    logger.info("Amount invalid");
                     return false;
                 }
 
@@ -430,12 +435,12 @@ public class ProcessorStartRoute extends BaseRouteBuilder {
         String[] columns = new String[0];
         if (header != null) {
             columns = header.split(",");
-            logger.debug("Columns in the csv file are {}", Arrays.toString(columns));
+            logger.info("Columns in the csv file are {}", Arrays.toString(columns));
         }
         int i = 0;
         while (i < columns.length) {
             if (columnNames.contains(columns[i])) {
-                logger.debug("Column name {} is at index {} ", columns[i], columnNames.indexOf(columns[i]));
+                logger.info("Column name {} is at index {} ", columns[i], columnNames.indexOf(columns[i]));
                 i++;
 
             } else {

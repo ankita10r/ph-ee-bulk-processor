@@ -33,19 +33,19 @@ public class BatchAggregateRoute extends BaseRouteBuilder {
          */
         from(RouteId.BATCH_AGGREGATE.getValue()).id(RouteId.BATCH_AGGREGATE.getValue())
                 .log("Starting route " + RouteId.BATCH_AGGREGATE.name())
-                .to("direct:get-access-token")
-                .choice()
-                .when(exchange -> exchange.getProperty(OPS_APP_ACCESS_TOKEN, String.class) != null)
-                .log(LoggingLevel.INFO, "Got access token, moving on to API call")
+//                .to("direct:get-access-token")
+//                .choice()
+//                .when(exchange -> exchange.getProperty(OPS_APP_ACCESS_TOKEN, String.class) != null)
+//                .log(LoggingLevel.INFO, "Got access token, moving on to API call")
                 .to("direct:batch-aggregate-api-call")
-                .to("direct:batch-aggregate-response-handler")
-                .otherwise()
-                .log(LoggingLevel.INFO, "Authentication failed.")
-                .endChoice();
+                .to("direct:batch-aggregate-response-handler");
+//                .otherwise()
+//                .log(LoggingLevel.INFO, "Authentication failed.")
+//                .endChoice();
 
         getBaseExternalApiRequestRouteDefinition("batch-aggregate-api-call", HttpRequestMethod.GET)
 //                .setHeader(Exchange.REST_HTTP_QUERY, simple("batchId=${exchangeProperty." + BATCH_ID + "}"))
-                .setHeader("Authorization", simple("Bearer ${exchangeProperty." + OPS_APP_ACCESS_TOKEN + "}"))
+               // .setHeader("Authorization", simple("Bearer ${exchangeProperty." + OPS_APP_ACCESS_TOKEN + "}"))
                 .setHeader(HEADER_PLATFORM_TENANT_ID, simple("${exchangeProperty." + TENANT_ID + "}")).process(exchange -> {
                     logger.info(exchange.getIn().getHeaders().toString());
                 }).toD(operationsAppConfig.batchAggregateUrl + "${exchangeProperty." + BATCH_ID + "}?bridgeEndpoint=true")

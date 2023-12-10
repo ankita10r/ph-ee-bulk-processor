@@ -29,18 +29,16 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import static org.mifos.processor.bulk.camel.config.CamelProperties.*;
-import static org.mifos.processor.bulk.zeebe.ZeebeVariables.PURPOSE;
+
 import java.nio.charset.Charset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import static org.mifos.processor.bulk.camel.config.CamelProperties.HEADER_PROGRAM_ID;
 import static org.mifos.processor.bulk.camel.config.CamelProperties.HEADER_REGISTERING_INSTITUTE_ID;
-import static org.mifos.processor.bulk.zeebe.ZeebeVariables.FILE_NAME;
+import static org.mifos.processor.bulk.zeebe.ZeebeVariables.*;
 import static org.mifos.processor.bulk.zeebe.ZeebeVariables.HEADER_CLIENT_CORRELATION_ID;
 import static org.mifos.processor.bulk.zeebe.ZeebeVariables.HEADER_PLATFORM_TENANT_ID;
-import static org.mifos.processor.bulk.zeebe.ZeebeVariables.HEADER_TYPE;
-import static org.mifos.processor.bulk.zeebe.ZeebeVariables.PURPOSE;
 
 @Slf4j
 @RestController
@@ -63,6 +61,7 @@ public class BatchTransactionsController implements BatchTransactions {
     @Autowired
     private CsvMapper csvMapper;
 
+
     @SneakyThrows
     @Override
     public String batchTransactions(
@@ -73,6 +72,7 @@ public class BatchTransactionsController implements BatchTransactions {
             String purpose,
             String type,
             String tenant,
+            String callbackUrl,
             String registeringInstitutionId,
             String programId) {
 
@@ -82,6 +82,7 @@ public class BatchTransactionsController implements BatchTransactions {
                 .addHeader(PURPOSE, purpose)
                 .addHeader(HEADER_TYPE, type)
                 .addHeader(HEADER_PLATFORM_TENANT_ID, tenant)
+                .addHeader(CALLBACK,callbackUrl)
                 .addHeader(HEADER_REGISTERING_INSTITUTE_ID, registeringInstitutionId)
                 .addHeader(HEADER_PROGRAM_ID, programId);
 
@@ -169,4 +170,5 @@ public class BatchTransactionsController implements BatchTransactions {
         }
 		return response;
     }
+
 }

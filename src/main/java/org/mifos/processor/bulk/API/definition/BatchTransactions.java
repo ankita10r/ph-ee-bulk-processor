@@ -1,13 +1,7 @@
 package org.mifos.processor.bulk.api.definition;
 
-import com.amazonaws.services.dynamodbv2.xspec.S;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import org.apache.camel.util.json.JsonObject;
-import org.json.JSONObject;
-import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
 
-import javax.mail.Multipart;
+import org.springframework.web.bind.annotation.*;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
@@ -27,8 +21,9 @@ public interface BatchTransactions {
             @RequestHeader(value = HEADER_CLIENT_CORRELATION_ID) String requestId,
             @RequestHeader(value = FILE_NAME, required = false) String fileName,
             @RequestHeader(value = PURPOSE) String purpose,
-            @RequestHeader(value = HEADER_TYPE) String type,
+            @RequestParam(value = HEADER_TYPE) String type,
             @RequestHeader(value = HEADER_PLATFORM_TENANT_ID) String tenant,
+            @RequestHeader(value = CALLBACK, required = false) String callbackUrl,
             @RequestHeader(value = HEADER_REGISTERING_INSTITUTE_ID, required = false) String registeringInstitutionId,
             @RequestHeader(value = HEADER_PROGRAM_ID, required = false) String programId) throws IOException;
 
