@@ -1,19 +1,15 @@
 package org.mifos.processor.bulk.api.implementation;
 
-import static org.mifos.processor.bulk.camel.config.CamelProperties.CALLBACK;
+import static org.mifos.processor.bulk.camel.config.CamelProperties.*;
 import static org.mifos.processor.bulk.camel.config.CamelProperties.HEADER_PROGRAM_ID;
 import static org.mifos.processor.bulk.camel.config.CamelProperties.HEADER_REGISTERING_INSTITUTE_ID;
-import static org.mifos.processor.bulk.zeebe.ZeebeVariables.FILE_NAME;
+import static org.mifos.processor.bulk.zeebe.ZeebeVariables.*;
 import static org.mifos.processor.bulk.zeebe.ZeebeVariables.HEADER_CLIENT_CORRELATION_ID;
 import static org.mifos.processor.bulk.zeebe.ZeebeVariables.HEADER_PLATFORM_TENANT_ID;
-import static org.mifos.processor.bulk.zeebe.ZeebeVariables.HEADER_TYPE;
-import static org.mifos.processor.bulk.zeebe.ZeebeVariables.PURPOSE;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.csv.CsvMapper;
-import io.camunda.zeebe.client.api.command.ClientStatusException;
-import io.grpc.Status;
 import java.nio.charset.Charset;
 import java.util.List;
 import java.util.Optional;
@@ -66,14 +62,16 @@ public class BatchTransactionsController implements BatchTransactions {
     @SneakyThrows
     @Override
     public String batchTransactions(HttpServletRequest httpServletRequest, HttpServletResponse httpServletResponse, String requestId,
-            String fileName, String purpose, String type, String tenant, String registeringInstitutionId, String programId,
-            String callbackUrl) {
+            String fileName, String purpose, String type, String tenant, String callbackUrl, String registeringInstitutionId,
+            String programId) {
 
         log.info("Inside api logic");
-        Headers.HeaderBuilder headerBuilder = new Headers.HeaderBuilder().addHeader(HEADER_CLIENT_CORRELATION_ID, requestId)
-                .addHeader(PURPOSE, purpose).addHeader(HEADER_TYPE, type).addHeader(HEADER_PLATFORM_TENANT_ID, tenant)
+        Headers.HeaderBuilder headerBuilder = new Headers.HeaderBuilder()
+                .addHeader(HEADER_CLIENT_CORRELATION_ID, requestId)
+                .addHeader(PURPOSE, purpose).addHeader(HEADER_TYPE, type)
+                .addHeader(HEADER_PLATFORM_TENANT_ID, tenant)
                 .addHeader(HEADER_REGISTERING_INSTITUTE_ID, registeringInstitutionId).addHeader(HEADER_PROGRAM_ID, programId)
-                .addHeader(CALLBACK, callbackUrl);
+                .addHeader(CALLBACK,callbackUrl);
 
         Optional<String> validationResponse = isValidRequest(httpServletRequest, fileName, type);
         if (validationResponse.isPresent()) {
@@ -104,7 +102,6 @@ public class BatchTransactionsController implements BatchTransactions {
             httpServletResponse.setStatus(response.getStatus());
             return response.getBody();
         }
-
     }
 
     @ExceptionHandler({ MultipartException.class })
@@ -117,7 +114,6 @@ public class BatchTransactionsController implements BatchTransactions {
     private CamelApiResponse sendRequestToCamel(Headers headers) {
         Exchange exchange = SpringWrapperUtil.getDefaultWrappedExchange(producerTemplate.getCamelContext(), headers);
         exchange = producerTemplate.send("direct:post-batch-transactions", exchange);
-        checkAndThrowClientStatusException(exchange);
         int statusCode = exchange.getIn().getHeader(Exchange.HTTP_RESPONSE_CODE, Integer.class);
         String body = exchange.getIn().getBody(String.class);
         return new CamelApiResponse(body, statusCode);
@@ -153,12 +149,5 @@ public class BatchTransactionsController implements BatchTransactions {
             response = Optional.of(errorJson);
         }
         return response;
-    }
-
-    private void checkAndThrowClientStatusException(Exchange exchange) {
-        Exception cause = exchange.getProperty(Exchange.EXCEPTION_CAUGHT, Exception.class);
-        if (cause instanceof ClientStatusException) {
-            throw new ClientStatusException(Status.FAILED_PRECONDITION, cause);
-        }
     }
 }

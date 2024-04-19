@@ -135,7 +135,7 @@ public final class ZeebeVariables {
     public static final String PAYER_IDENTIFIER_TYPE = "payerIdentifierType";
     public static final String PAYER_IDENTIFIER_VALUE = "payerIdentifier";
     public static final String HEADER_CLIENT_CORRELATION_ID = "X-CorrelationID";
-    public static final String HEADER_TYPE = "Type";
+    public static final String HEADER_TYPE = "type";
     public static final String HEADER_PLATFORM_TENANT_ID = "Platform-TenantId";
 
     public static final String AUTHORIZATION_SUCCESSFUL = "authorizationSuccessful";

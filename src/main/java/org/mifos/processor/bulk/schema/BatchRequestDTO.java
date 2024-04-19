@@ -1,10 +1,11 @@
 package org.mifos.processor.bulk.schema;
 
-import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+
+import java.util.List;
 
 @Getter
 @Setter
@@ -12,12 +13,8 @@ import lombok.Setter;
 @NoArgsConstructor
 public class BatchRequestDTO {
 
-    List<Party> creditParty;
-    List<Party> debitParty;
+    List<Party> creditParty, debitParty;
 
-    String subType;
-    String amount;
-    String currency;
-    String descriptionText;
+    String paymentMode, amount, currency, descriptionText;
 
 }
