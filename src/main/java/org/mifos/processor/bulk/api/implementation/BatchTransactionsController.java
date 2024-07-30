@@ -12,21 +12,27 @@ import static org.mifos.processor.bulk.zeebe.ZeebeVariables.PURPOSE;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.csv.CsvMapper;
-import io.camunda.zeebe.client.api.command.ClientStatusException;
-import io.grpc.Status;
+
+import java.io.IOException;
 import java.nio.charset.Charset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+
+import io.camunda.zeebe.client.api.command.ClientStatusException;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
+
 import org.apache.camel.Exchange;
 import org.apache.camel.ProducerTemplate;
 import org.apache.commons.io.IOUtils;
 import org.json.JSONObject;
+import org.mifos.connector.common.channel.dto.PhErrorDTO;
 import org.mifos.connector.common.interceptor.JWSUtil;
+import org.mifos.processor.bulk.BatchTransactionValidator;
 import org.mifos.processor.bulk.api.definition.BatchTransactions;
 import org.mifos.processor.bulk.file.FileStorageService;
 import org.mifos.processor.bulk.format.RestRequestConvertor;
@@ -36,6 +42,7 @@ import org.mifos.processor.bulk.schema.Transaction;
 import org.mifos.processor.bulk.utility.CsvWriter;
 import org.mifos.processor.bulk.utility.Headers;
 import org.mifos.processor.bulk.utility.SpringWrapperUtil;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -60,16 +67,37 @@ public class BatchTransactionsController implements BatchTransactions {
 
     @Value("#{'${tenants}'.split(',')}")
     protected List<String> tenants;
+
     @Autowired
     private CsvMapper csvMapper;
+
+    @Autowired
+    private BatchTransactionValidator batchTransactionValidator;
 
     @SneakyThrows
     @Override
     public String batchTransactions(HttpServletRequest httpServletRequest, HttpServletResponse httpServletResponse, String requestId,
-            String fileName, String purpose, String type, String tenant, String registeringInstitutionId, String programId,
-            String callbackUrl) {
+                                    String fileName, String purpose, String type, String tenant, String registeringInstitutionId, String programId,
+                                    String callbackUrl) throws IOException {
 
+        log.info("Executing the logic");
+        PhErrorDTO error = batchTransactionValidator.validateBatchTransactions(requestId, fileName, purpose, type, tenant,
+                registeringInstitutionId, programId, callbackUrl);
+        if (error != null) {
+            httpServletResponse.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+            log.info("Error is - {}", error.toString());
+            return error.toString();
+        } else if (error == null) {
+            return callLogic(httpServletRequest, httpServletResponse, requestId, fileName, purpose, type, tenant,
+                    registeringInstitutionId, programId, callbackUrl);
+        }
+        return requestId;
+    }
+    private String callLogic(HttpServletRequest httpServletRequest, HttpServletResponse httpServletResponse, String requestId,
+                             String fileName, String purpose, String type, String tenant, String registeringInstitutionId, String programId,
+                             String callbackUrl) throws IOException {
         log.info("Inside api logic");
+
         Headers.HeaderBuilder headerBuilder = new Headers.HeaderBuilder().addHeader(HEADER_CLIENT_CORRELATION_ID, requestId)
                 .addHeader(PURPOSE, purpose).addHeader(HEADER_TYPE, type).addHeader(HEADER_PLATFORM_TENANT_ID, tenant)
                 .addHeader(HEADER_REGISTERING_INSTITUTE_ID, registeringInstitutionId).addHeader(HEADER_PROGRAM_ID, programId)
@@ -77,12 +105,12 @@ public class BatchTransactionsController implements BatchTransactions {
 
         Optional<String> validationResponse = isValidRequest(httpServletRequest, fileName, type);
         if (validationResponse.isPresent()) {
-            httpServletResponse.setStatus(httpServletResponse.SC_BAD_REQUEST);
+            httpServletResponse.setStatus(HttpServletResponse.SC_BAD_REQUEST);
             return validationResponse.get();
         }
 
         if (JWSUtil.isMultipartRequest(httpServletRequest)) {
-            log.info("This is file based request");
+            log.info("This is a file-based request");
             String localFileName = fileStorageService.save(JWSUtil.parseFormData(httpServletRequest), fileName);
             Headers headers = headerBuilder.addHeader(FILE_NAME, localFileName).build();
             log.info("Headers passed: {}", headers.getHeaders());
@@ -91,7 +119,7 @@ public class BatchTransactionsController implements BatchTransactions {
             httpServletResponse.setStatus(response.getStatus());
             return response.getBody();
         } else {
-            log.info("This is json based request");
+            log.info("This is a JSON-based request");
             String jsonString = IOUtils.toString(httpServletRequest.getInputStream(), Charset.defaultCharset());
             List<BatchRequestDTO> batchRequestDTOList = objectMapper.readValue(jsonString, new TypeReference<>() {});
             List<Transaction> transactionList = restRequestConvertor.convertListFrom(batchRequestDTOList);
@@ -104,14 +132,12 @@ public class BatchTransactionsController implements BatchTransactions {
             httpServletResponse.setStatus(response.getStatus());
             return response.getBody();
         }
-
     }
 
     @ExceptionHandler({ MultipartException.class })
     public String handleMultipartException(HttpServletResponse httpServletResponse) {
-        httpServletResponse.setStatus(httpServletResponse.SC_BAD_REQUEST);
-        return getErrorResponse("File not uploaded", "There was no fie uploaded with the request. " + "Please upload a file and try again.",
-                400);
+        httpServletResponse.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+        return getErrorResponse("File not uploaded", "There was no file uploaded with the request. Please upload a file and try again.", 400);
     }
 
     private CamelApiResponse sendRequestToCamel(Headers headers) {
@@ -125,8 +151,8 @@ public class BatchTransactionsController implements BatchTransactions {
 
     private String getErrorResponse(String information, String description, int code) {
         JSONObject json = new JSONObject();
-        json.put("errorInformation", "File not uploaded");
-        json.put("errorDescription", "There was no fie uploaded with the request. " + "Please upload a file and try again.");
+        json.put("errorInformation", information);
+        json.put("errorDescription", description);
         json.put("errorCode", code);
         return json.toString();
     }
@@ -140,11 +166,10 @@ public class BatchTransactionsController implements BatchTransactions {
             String errorJson = getErrorResponse("Type mismatch",
                     "The value of the header \"" + HEADER_TYPE + "\" doesn't match with the request content-type", 400);
             response = Optional.of(errorJson);
-
         }
-        if (JWSUtil.isMultipartRequest(httpServletRequest) && fileName.isEmpty()) {
+        if (JWSUtil.isMultipartRequest(httpServletRequest) && (fileName == null || fileName.isEmpty())) {
             String errorJson = getErrorResponse("Header can't be empty",
-                    "If the request is of type csv, the header \"" + FILE_NAME + "\"can't be empty", 400);
+                    "If the request is of type csv, the header \"" + FILE_NAME + "\" can't be empty", 400);
             response = Optional.of(errorJson);
         }
         if (!type.equalsIgnoreCase("raw") && !type.equalsIgnoreCase("csv")) {
@@ -158,7 +183,7 @@ public class BatchTransactionsController implements BatchTransactions {
     private void checkAndThrowClientStatusException(Exchange exchange) {
         Exception cause = exchange.getProperty(Exchange.EXCEPTION_CAUGHT, Exception.class);
         if (cause instanceof ClientStatusException) {
-            throw new ClientStatusException(Status.FAILED_PRECONDITION, cause);
+            throw new ClientStatusException(io.grpc.Status.FAILED_PRECONDITION, cause);
         }
     }
 }

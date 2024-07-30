@@ -1,5 +1,5 @@
 camel:
-  server-port: 5000
+  server-port: 5001
   disable-ssl: false
   springboot:
     main-run-controller: true
@@ -8,7 +8,7 @@ camel:
         auto-discover-object-mapper: true
 
 kafka:
-  bootstrapAddress: "kafka:9092"
+  #bootstrapAddress: "kafka:9092"
   topic:
     gsma:
       name: gsma
@@ -27,7 +27,7 @@ zeebe:
     #    number-of-workers: 8
     #    evenly-allocated-max-jobs: "#{${zeebe.client.max-execution-threads} / ${zeebe.client.number-of-workers}}"
   broker:
-    contactpoint: "zeebe-zeebe-gateway:26500"
+    contactpoint: "localhost:26500"
 
 operations-app:
   contactpoint: "https://ops-bk.sandbox.mifos.io"
@@ -133,13 +133,13 @@ callback-phases:
     - 100
 
 server:
-  ssl:
-    key-alias: "tomcat-https"
-    key-store: "classpath:keystore.jks"
-    key-store-type: JKS
-    key-password: "password"
-    key-store-password: "password"
-  port: 8443
+#  ssl:
+#    key-alias: "tomcat-https"
+#    key-store: "classpath:keystore.jks"
+#    key-store-type: JKS
+#    key-password: "password"
+#    key-store-password: "password"
+  port: 8444
 
 
 security:
