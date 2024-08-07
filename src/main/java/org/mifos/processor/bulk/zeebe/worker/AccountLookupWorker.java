@@ -18,6 +18,11 @@ import static org.mifos.processor.bulk.zeebe.worker.Worker.ACCOUNT_LOOKUP;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.camunda.zeebe.client.ZeebeClient;
 import java.util.Map;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
+
 import org.apache.camel.CamelContext;
 import org.apache.camel.Exchange;
 import org.apache.camel.ProducerTemplate;
@@ -46,6 +51,9 @@ public class AccountLookupWorker extends BaseWorker {
     private String accountLookupCallback;
     @Value("${identity_account_mapper.account_lookup}")
     private String accountLookupEndpoint;
+    private static final int TIMEOUT_SECONDS = 10;
+    private static final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
+
 
     @Override
     public void setup() {
@@ -54,36 +62,48 @@ public class AccountLookupWorker extends BaseWorker {
             logger.info("Job '{}' started from process '{}' with key {}", job.getType(), job.getBpmnProcessId(), job.getKey());
             Map<String, Object> existingVariables = job.getVariablesAsMap();
             logger.info(existingVariables.toString());
-            existingVariables.put(ACCOUNT_LOOKUP_RETRY_COUNT, 1);
-            existingVariables.put(CACHED_TRANSACTION_ID, job.getKey());
+            ScheduledFuture<?> timeoutHandler = scheduler.schedule(() -> {
+                logger.error("Job '{}' with key {} is stuck.", job.getType(), job.getKey());
+                logger.info("Workflow stuck, terminating");
+            }, TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            try {
 
-            boolean isTransactionRequest = (boolean) existingVariables.get(IS_RTP_REQUEST);
-            String tenantId = (String) existingVariables.get(TENANT_ID);
-            Object channelRequest = existingVariables.get(CHANNEL_REQUEST);
-            TransactionChannelRequestDTO request = objectMapper.readValue((String) channelRequest, TransactionChannelRequestDTO.class);
+                existingVariables.put(ACCOUNT_LOOKUP_RETRY_COUNT, 1);
+                existingVariables.put(CACHED_TRANSACTION_ID, job.getKey());
 
-            existingVariables.put(INITIATOR_FSP_ID, tenantId);
-            PartyIdInfo requestedParty = isTransactionRequest ? request.getPayer().getPartyIdInfo() : request.getPayee().getPartyIdInfo();
+                boolean isTransactionRequest = (boolean) existingVariables.get(IS_RTP_REQUEST);
+                String tenantId = (String) existingVariables.get(TENANT_ID);
+                Object channelRequest = existingVariables.get(CHANNEL_REQUEST);
+                TransactionChannelRequestDTO request = objectMapper.readValue((String) channelRequest, TransactionChannelRequestDTO.class);
 
-            String payeeIdentity = requestedParty.getPartyIdentifier();
-            String paymentModality = requestedParty.getPartyIdType().toString();
+                existingVariables.put(INITIATOR_FSP_ID, tenantId);
+                PartyIdInfo requestedParty = isTransactionRequest ? request.getPayer().getPartyIdInfo() : request.getPayee().getPartyIdInfo();
 
-            Exchange exchange = new DefaultExchange(camelContext);
-            exchange.setProperty(HOST, identityMapperURL);
-            exchange.setProperty(PAYEE_IDENTITY, payeeIdentity);
-            exchange.setProperty(PAYMENT_MODALITY, paymentModality);
-            exchange.setProperty(CALLBACK, identityMapperURL + accountLookupCallback);
-            exchange.setProperty(TRANSACTION_ID, existingVariables.get(TRANSACTION_ID));
-            exchange.setProperty("requestId", job.getKey());
-            exchange.setProperty(CHANNEL_REQUEST, channelRequest);
-            exchange.setProperty(ORIGIN_DATE, existingVariables.get(ORIGIN_DATE));
-            exchange.setProperty(TENANT_ID, tenantId);
-            exchange.setProperty(HEADER_REGISTERING_INSTITUTE_ID, existingVariables.get(HEADER_REGISTERING_INSTITUTE_ID));
-            producerTemplate.send("direct:send-account-lookup", exchange);
+                String payeeIdentity = requestedParty.getPartyIdentifier();
+                String paymentModality = requestedParty.getPartyIdType().toString();
 
-            client.newCompleteCommand(job.getKey()).variables(existingVariables).send();
+                Exchange exchange = new DefaultExchange(camelContext);
+                exchange.setProperty(HOST, identityMapperURL);
+                exchange.setProperty(PAYEE_IDENTITY, payeeIdentity);
+                exchange.setProperty(PAYMENT_MODALITY, paymentModality);
+                exchange.setProperty(CALLBACK, identityMapperURL + accountLookupCallback);
+                exchange.setProperty(TRANSACTION_ID, existingVariables.get(TRANSACTION_ID));
+                exchange.setProperty("requestId", job.getKey());
+                exchange.setProperty(CHANNEL_REQUEST, channelRequest);
+                exchange.setProperty(ORIGIN_DATE, existingVariables.get(ORIGIN_DATE));
+                exchange.setProperty(TENANT_ID, tenantId);
+                exchange.setProperty(HEADER_REGISTERING_INSTITUTE_ID, existingVariables.get(HEADER_REGISTERING_INSTITUTE_ID));
+                producerTemplate.send("direct:send-account-lookup", exchange);
+
+                client.newCompleteCommand(job.getKey()).variables(existingVariables).send();
+                timeoutHandler.cancel(false);  // Cancel the timeout if the job completes successfully
+                logger.info("Job '{}' with key {} completed successfully.", job.getType(), job.getKey());
+            } catch (Exception e) {
+                timeoutHandler.cancel(false);  // Cancel the timeout on error as well
+                logger.error("Error processing job '{}': {}", job.getType(), e.getMessage(), e);
+            }
+
         }).name(String.valueOf(ACCOUNT_LOOKUP)).open();
 
     }
-
 }
